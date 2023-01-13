@@ -1,49 +1,42 @@
 package gee
 
 import (
-	"fmt"
 	"net/http"
 )
 
-type HandlerFunc func(http.ResponseWriter, *http.Request)
+type HandlerFunc func(c *Context)
 
 type Engine struct {
-	http.Handler                        // implement interface
-	router       map[string]HandlerFunc // record route rules
+	http.Handler         // implement interface
+	router       *router // record route rules
 }
 
 func NewEngine() *Engine {
-	return &Engine{router: make(map[string]HandlerFunc)}
+	return &Engine{router: NewRouter()}
 }
 
-// addRouter is a private method.
+// addRouter is a private method and defines the method to add router.
 func (engine *Engine) addRouter(method string, pattern string, handler HandlerFunc) {
-	key := method + "-" + pattern
-	engine.router[key] = handler
+	engine.router.addRouter(method, pattern, handler)
 }
 
-// GET is called from user to add GET router
+// GET defines the method to add get router
 func (engine *Engine) GET(pattern string, handler HandlerFunc) {
 	engine.addRouter("GET", pattern, handler)
 }
 
-// POST is called from user to add POST router
+// POST defines the method to add post router
 func (engine *Engine) POST(pattern string, handler HandlerFunc) {
 	engine.addRouter("POST", pattern, handler)
 }
 
-// Run will listen addr and serve service
+// Run defines the method to run the engine
 func (engine *Engine) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, engine)
 }
 
 // implement http.Handler interface
 func (engine *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	key := req.Method + "-" + req.URL.Path
-	if handler, ok := engine.router[key]; ok {
-		handler(res, req)
-	} else {
-		res.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(res, "404 NOT FOUND: %q\n", req.URL)
-	}
+	context := NewContext(res, req)
+	engine.router.handle(context)
 }
