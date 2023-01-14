@@ -12,12 +12,12 @@ type Engine struct {
 }
 
 func NewEngine() *Engine {
-	return &Engine{router: NewRouter()}
+	return &Engine{router: newRouter()}
 }
 
 // addRouter is a private method and defines the method to add router.
 func (engine *Engine) addRouter(method string, pattern string, handler HandlerFunc) {
-	engine.router.addRouter(method, pattern, handler)
+	engine.router.addRoute(method, pattern, handler)
 }
 
 // GET defines the method to add get router

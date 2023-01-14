@@ -2,6 +2,7 @@ package main
 
 import (
 	"gee"
+	"log"
 	"net/http"
 )
 
@@ -14,12 +15,15 @@ func main() {
 		// expect /hello?username=ning
 		c.String(http.StatusOK, "hello %s, you're at %s\n", c.Query("username"), c.Path)
 	})
-	g.POST("/login", func(c *gee.Context) {
+	g.GET("/hello/:username", func(c *gee.Context) {
+		c.String(http.StatusOK, "hello %s, you're at %s\n", c.Param("username"), c.Path)
+	})
+
+	g.GET("/assets/*filepath", func(c *gee.Context) {
 		c.JSON(http.StatusOK, gee.Json{
-			"username": c.PostForm("username"),
-			"password": c.PostForm("password"),
+			"filepath": c.Param("filepath"),
 		})
 	})
 
-	g.Run("0.0.0.0:9999")
+	log.Fatal(g.Run("0.0.0.0:9999"))
 }
