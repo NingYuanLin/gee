@@ -7,23 +7,32 @@ import (
 )
 
 func main() {
-	g := gee.NewEngine()
-	g.GET("/", func(c *gee.Context) {
-		c.HTML(http.StatusOK, "<h1>root path</h1>")
-	})
-	g.GET("/hello", func(c *gee.Context) {
-		// expect /hello?username=ning
-		c.String(http.StatusOK, "hello %s, you're at %s\n", c.Query("username"), c.Path)
-	})
-	g.GET("/hello/:username", func(c *gee.Context) {
-		c.String(http.StatusOK, "hello %s, you're at %s\n", c.Param("username"), c.Path)
+	g := gee.New()
+
+	g.GET("/index", func(c *gee.Context) {
+		c.HTML(http.StatusOK, "<h1>index page</h1>")
 	})
 
-	g.GET("/assets/*filepath", func(c *gee.Context) {
-		c.JSON(http.StatusOK, gee.Json{
-			"filepath": c.Param("filepath"),
+	v1 := g.Group("/v1")
+	{
+		v1.GET("/hello", func(c *gee.Context) {
+			c.HTML(http.StatusOK, "hello@v1\n")
 		})
-	})
+		v1.GET("/hello/:username", func(c *gee.Context) {
+			// expect /hello/ning
+			c.String(http.StatusOK, "hello %s, you're at %s @v1\n", c.Param("username"), c.Path)
+		})
+	}
+	v2 := g.Group("/v2")
+	{
+		v2.GET("/hello", func(c *gee.Context) {
+			c.HTML(http.StatusOK, "hello@v2\n")
+		})
+		v2.GET("/hello/:username", func(c *gee.Context) {
+			// expect /hello/ning
+			c.String(http.StatusOK, "hello %s, you're at %s @v2\n", c.Param("username"), c.Path)
+		})
+	}
 
 	log.Fatal(g.Run("0.0.0.0:9999"))
 }
