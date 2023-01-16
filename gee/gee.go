@@ -1,8 +1,9 @@
 package gee
 
 import (
-	"log"
+	"html/template"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -11,8 +12,7 @@ type HandlerFunc func(c *Context)
 type RouterGroup struct {
 	prefix      string
 	middlewares []HandlerFunc // 中间件
-	//parent      *RouterGroup  // 支持嵌套
-	engine *Engine // 所有的group共享同一个engine实例
+	engine      *Engine       // 所有的group共享同一个engine实例
 }
 
 type Engine struct {
@@ -20,6 +20,9 @@ type Engine struct {
 	*RouterGroup         // 组合 composition
 	router       *router // record route rules
 	groups       []*RouterGroup
+	// html render
+	htmlTemplates *template.Template
+	funcMap       template.FuncMap
 }
 
 func New() *Engine {
@@ -30,6 +33,36 @@ func New() *Engine {
 	engine.router = newRouter()
 	engine.groups = []*RouterGroup{engine.RouterGroup}
 	return engine
+}
+
+func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	// fs may be: http.Dir(rootPath)
+	// assume: relativePath: /v1; group.prefix: /assets; rootPath: /root/statics
+	// absolutePath: /v1/assets
+	absolutePath := path.Join(group.prefix, relativePath)
+	// remove prefix /v1/assets from req.URL.Path
+	// /v1/assets/file.txt => /file.txt
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(c *Context) {
+		// file.txt
+		filepath := c.Params["filepath"]
+		// check if file exits, and we have permission to access it
+		// fs.Open(filepath) = /root/statics/file.txt
+		if _, err := fs.Open(filepath); err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		fileServer.ServeHTTP(c.Writer, c.Req)
+	}
+}
+
+// Static is defined to serve static files
+// relativePath: the URL prefix you want to use. such as /assets/statics
+// root: dir path in local systems. such as /root/statics/
+func (group *RouterGroup) Static(method string, relativePath string, root string) {
+	staticHandler := group.createStaticHandler(relativePath, http.Dir(root))
+	urlPattern := path.Join(relativePath, "/*filepath")
+	group.addRoute(method, urlPattern, staticHandler)
 }
 
 func (group *RouterGroup) AddMiddleware(middleware ...HandlerFunc) {
@@ -53,7 +86,6 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 // comp: Composition
 func (group *RouterGroup) addRoute(method string, comp string, handler HandlerFunc) {
 	pattern := group.prefix + comp
-	log.Printf("Route %4s - %4s\n", method, pattern)
 	group.engine.router.addRoute(method, pattern, handler)
 }
 
@@ -72,6 +104,22 @@ func (engine *Engine) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, engine)
 }
 
+func (engine *Engine) SetFuncMap(funcMap template.FuncMap) {
+	engine.funcMap = funcMap
+}
+
+func (engine *Engine) LoadHTMLGlob(pattern string) {
+	/*
+		pattern may be "templates/*"
+		分析：
+		1. template.Must() 让template对象的加载，如果加载不到，就产生panic
+		2. template.New() 产生template对象
+		3. Funcs() 添加模板函数，engine中的funcMap是个map类型里面能够保存多个模板函数
+		4. ParseGlob() 将pattern中的文件全都读取出来，按照name，存入engine.htmlTemplates中（每个里面都携带了自定义模板函数）
+	*/
+	engine.htmlTemplates = template.Must(template.New("").Funcs(engine.funcMap).ParseGlob(pattern))
+}
+
 // implement http.Handler interface
 func (engine *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	var middlewares []HandlerFunc
@@ -85,5 +133,6 @@ func (engine *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 	context := NewContext(res, req)
 	context.handlers = middlewares
+	context.engine = engine
 	engine.router.handle(context)
 }

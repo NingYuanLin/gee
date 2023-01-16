@@ -1,56 +1,40 @@
 package main
 
 import (
+	"fmt"
 	"gee"
+	"html/template"
 	"log"
 	"net/http"
+	"time"
 )
 
-func v2Middleware1() gee.HandlerFunc {
-	return func(c *gee.Context) {
-		c.String(http.StatusOK, "v2Middleware1 enter\n")
-		c.Next()
-		c.String(http.StatusOK, "v2Middleware1 exit\n")
-	}
-}
-
-func v2Middleware2() gee.HandlerFunc {
-	return func(c *gee.Context) {
-		c.String(http.StatusOK, "v2Middleware2 enter\n")
-		c.Next()
-		c.String(http.StatusOK, "v2Middleware2 exit\n")
-	}
+func FormatAsDate(t time.Time) string {
+	year, month, day := t.Date()
+	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
 }
 
 func main() {
 	g := gee.New()
-
-	g.GET("/index", func(c *gee.Context) {
-		c.HTML(http.StatusOK, "<h1>index page</h1>")
+	g.SetFuncMap(template.FuncMap{
+		"FormatAsDate": FormatAsDate,
 	})
+	g.LoadHTMLGlob("templates/*")
+	//g.Static("GET", "/assets", "./statics")
+	// or
+	g.Group("/assets").Static("GET", "", "./statics")
 
-	v1 := g.Group("/v1")
-	{
-		v1.GET("/hello", func(c *gee.Context) {
-			c.HTML(http.StatusOK, "hello@v1\n")
+	g2 := g.Group("/html")
+
+	g2.GET("/", func(c *gee.Context) {
+		c.HTML(http.StatusOK, "css.tmpl", nil)
+	})
+	g2.GET("/date", func(c *gee.Context) {
+		c.HTML(http.StatusOK, "custom_func.tmpl", gee.Json{
+			"title": "ning",
+			"now":   time.Date(2023, 1, 17, 00, 18, 00, 00, time.UTC),
 		})
-		v1.GET("/hello/:username", func(c *gee.Context) {
-			// expect /hello/ning
-			c.String(http.StatusOK, "hello %s, you're at %s @v1\n", c.Param("username"), c.Path)
-		})
-	}
-	v2 := g.Group("/v2")
-	v2.AddMiddleware(v2Middleware1())
-	v2.AddMiddleware(v2Middleware2())
-	{
-		v2.GET("/hello", func(c *gee.Context) {
-			c.HTML(http.StatusOK, "hello@v2\n")
-		})
-		v2.GET("/hello/:username", func(c *gee.Context) {
-			// expect /hello/ning
-			c.String(http.StatusOK, "hello %s, you're at %s @v2\n", c.Param("username"), c.Path)
-		})
-	}
+	})
 
 	log.Fatal(g.Run("0.0.0.0:9999"))
 }
