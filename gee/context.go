@@ -18,6 +18,9 @@ type Context struct {
 	Params map[string]string
 	// response info
 	StatusCode int
+	// middleware
+	handlers []HandlerFunc
+	index    int // default:-1
 }
 
 func NewContext(writer http.ResponseWriter, Req *http.Request) *Context {
@@ -26,6 +29,14 @@ func NewContext(writer http.ResponseWriter, Req *http.Request) *Context {
 		Req:    Req,
 		Path:   Req.URL.Path,
 		Method: Req.Method,
+		index:  -1,
+	}
+}
+
+func (c *Context) Next() {
+	c.index++
+	for ; c.index < len(c.handlers); c.index++ {
+		c.handlers[c.index](c)
 	}
 }
 
@@ -47,8 +58,12 @@ func (c *Context) Param(key string) string {
 
 // Status defines the method to set status code
 func (c *Context) Status(code int) {
-	c.StatusCode = code
-	c.Writer.WriteHeader(code)
+	// 避免重复调用
+	// TODO: 需要优化逻辑
+	if c.StatusCode == 0 {
+		c.StatusCode = code
+		c.Writer.WriteHeader(code)
+	}
 }
 
 // SetHeader defines the method to set response header

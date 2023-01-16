@@ -6,6 +6,22 @@ import (
 	"net/http"
 )
 
+func v2Middleware1() gee.HandlerFunc {
+	return func(c *gee.Context) {
+		c.String(http.StatusOK, "v2Middleware1 enter\n")
+		c.Next()
+		c.String(http.StatusOK, "v2Middleware1 exit\n")
+	}
+}
+
+func v2Middleware2() gee.HandlerFunc {
+	return func(c *gee.Context) {
+		c.String(http.StatusOK, "v2Middleware2 enter\n")
+		c.Next()
+		c.String(http.StatusOK, "v2Middleware2 exit\n")
+	}
+}
+
 func main() {
 	g := gee.New()
 
@@ -24,6 +40,8 @@ func main() {
 		})
 	}
 	v2 := g.Group("/v2")
+	v2.AddMiddleware(v2Middleware1())
+	v2.AddMiddleware(v2Middleware2())
 	{
 		v2.GET("/hello", func(c *gee.Context) {
 			c.HTML(http.StatusOK, "hello@v2\n")

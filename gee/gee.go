@@ -3,6 +3,7 @@ package gee
 import (
 	"log"
 	"net/http"
+	"strings"
 )
 
 type HandlerFunc func(c *Context)
@@ -18,7 +19,7 @@ type Engine struct {
 	http.Handler         // implement interface
 	*RouterGroup         // 组合 composition
 	router       *router // record route rules
-	//groups       []*RouterGroup
+	groups       []*RouterGroup
 }
 
 func New() *Engine {
@@ -27,8 +28,12 @@ func New() *Engine {
 		engine: engine,
 	}
 	engine.router = newRouter()
-	//engine.groups = []*RouterGroup{engine.RouterGroup}
+	engine.groups = []*RouterGroup{engine.RouterGroup}
 	return engine
+}
+
+func (group *RouterGroup) AddMiddleware(middleware ...HandlerFunc) {
+	group.middlewares = append(group.middlewares, middleware...)
 }
 
 // Group is defined to create a new group
@@ -40,7 +45,7 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 		//parent: group,
 		engine: engine,
 	}
-	//engine.groups = append(engine.groups, newGroup)
+	engine.groups = append(engine.groups, newGroup)
 	return newGroup
 }
 
@@ -69,6 +74,16 @@ func (engine *Engine) Run(addr string) (err error) {
 
 // implement http.Handler interface
 func (engine *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	// TODO: 性能问题
+	for _, group := range engine.groups {
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			// TODO: 这里的顺序没办法很好地去控制, 只能根据AddMiddleware函数调用的顺序来进行
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
+
 	context := NewContext(res, req)
+	context.handlers = middlewares
 	engine.router.handle(context)
 }
